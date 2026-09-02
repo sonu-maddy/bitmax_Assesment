@@ -7,7 +7,13 @@ import {
   generateRefreshToken,
 } from "../utils/generateToken.js";
 
-import {sendOtpEmail} from "../config/email.js";
+import { sendOtpEmail } from "../config/email.js";
+
+import {
+  sendPhoneOtp,
+  verifyPhoneOtpCode,
+  normalizePhoneNumber,
+} from "../service/phoneOtpService.js";
 
 export const verifyOtp = async (req, res) => {
   try {
@@ -20,7 +26,6 @@ export const verifyOtp = async (req, res) => {
       });
     }
 
-   
     const user = userId
       ? await User.findById(userId).select("+otp +otpExpires")
       : await User.findOne({
@@ -65,7 +70,6 @@ export const verifyOtp = async (req, res) => {
       });
     }
 
-  
     if (user.email) {
       user.isEmailVerified = true;
     }
@@ -73,7 +77,6 @@ export const verifyOtp = async (req, res) => {
     if (user.phone) {
       user.isPhoneVerified = true;
     }
-
 
     user.otp = undefined;
     user.otpExpires = undefined;
@@ -102,8 +105,6 @@ export const verifyOtp = async (req, res) => {
   }
 };
 
-
-
 export const requestEmailLoginOtp = async (req, res) => {
   try {
     const { email } = req.body;
@@ -115,8 +116,10 @@ export const requestEmailLoginOtp = async (req, res) => {
       });
     }
 
+    const normalizedEmail = email.toLowerCase().trim();
+
     const user = await User.findOne({
-      email: email.toLowerCase().trim(),
+      email: normalizedEmail,
     });
 
     if (!user) {
@@ -136,20 +139,17 @@ export const requestEmailLoginOtp = async (req, res) => {
     const otp = generateOtp();
 
     user.otp = otp;
-
-    user.otpExpires = new Date(
-      Date.now() + 5 * 60 * 1000
-    );
+    user.otpExpires = new Date(Date.now() + 5 * 60 * 1000);
 
     await user.save();
 
-    await sendOtpEmail(email, otp);
+    // Send OTP to email
+    await sendOtpEmail(normalizedEmail, otp);
 
     return res.status(200).json({
       success: true,
       message: "OTP sent to your email",
     });
-
   } catch (error) {
     console.error("Email OTP error:", error);
 
@@ -159,8 +159,6 @@ export const requestEmailLoginOtp = async (req, res) => {
     });
   }
 };
-
-
 
 export const verifyEmailLoginOtp = async (req, res) => {
   try {
@@ -173,8 +171,10 @@ export const verifyEmailLoginOtp = async (req, res) => {
       });
     }
 
+    const normalizedEmail = email.toLowerCase().trim();
+
     const user = await User.findOne({
-      email: email.toLowerCase().trim(),
+      email: normalizedEmail,
     }).select("+otp +otpExpires");
 
     if (!user) {
@@ -184,37 +184,77 @@ export const verifyEmailLoginOtp = async (req, res) => {
       });
     }
 
+    if (!user.isEmailVerified) {
+      return res.status(403).json({
+        success: false,
+        message: "Please verify your email first",
+      });
+    }
+
     if (!user.otp || !user.otpExpires) {
       return res.status(400).json({
         success: false,
-        message: "No OTP found",
+        message: "No OTP found. Please request a new OTP.",
       });
     }
 
     if (new Date() > user.otpExpires) {
+      user.otp = undefined;
+      user.otpExpires = undefined;
+      await user.save();
+
       return res.status(400).json({
         success: false,
-        message: "OTP expired",
+        message: "OTP expired. Please request a new OTP.",
       });
     }
 
-    if (user.otp !== otp) {
+    if (user.otp !== otp.trim()) {
       return res.status(400).json({
         success: false,
         message: "Invalid OTP",
       });
     }
 
+    // Generate tokens
+    const accessToken = generateAccessToken(user._id);
+    const refreshToken = generateRefreshToken(user._id);
+
+    // Save refresh token
+    user.refreshToken = refreshToken;
+
+    // Clear OTP
     user.otp = undefined;
     user.otpExpires = undefined;
 
+    user.lastLoginAt = new Date();
+
     await user.save();
+
+    // Refresh token cookie
+    res.cookie("refreshToken", refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
 
     return res.status(200).json({
       success: true,
-      message: "Login successful",
+      message: "Email OTP login successful",
+      data: {
+        user: {
+          userId: user._id,
+          name: user.name,
+          email: user.email,
+          phone: user.phone,
+          isEmailVerified: user.isEmailVerified,
+          isPhoneVerified: user.isPhoneVerified,
+        },
+        accessToken,
+        refreshToken,
+      },
     });
-
   } catch (error) {
     console.error("Verify email OTP error:", error);
 
@@ -225,10 +265,10 @@ export const verifyEmailLoginOtp = async (req, res) => {
   }
 };
 
-
-
 export const requestPhoneLoginOtp = async (req, res) => {
   try {
+    console.log("📱 PHONE OTP REQUEST:", req.body);
+
     const { phone } = req.body;
 
     if (!phone) {
@@ -238,7 +278,23 @@ export const requestPhoneLoginOtp = async (req, res) => {
       });
     }
 
-    const user = await User.findOne({ phone });
+    const normalizedPhone = normalizePhoneNumber(phone);
+
+    /*
+    |--------------------------------------------------------------------------
+    | Find User
+    |--------------------------------------------------------------------------
+    */
+
+    let user = await User.findOne({
+      phone: phone.toString().trim(),
+    });
+
+    if (!user) {
+      user = await User.findOne({
+        phone: normalizedPhone,
+      });
+    }
 
     if (!user) {
       return res.status(404).json({
@@ -246,6 +302,12 @@ export const requestPhoneLoginOtp = async (req, res) => {
         message: "User not found.",
       });
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Phone Verification Check
+    |--------------------------------------------------------------------------
+    */
 
     if (!user.isPhoneVerified) {
       return res.status(403).json({
@@ -254,43 +316,65 @@ export const requestPhoneLoginOtp = async (req, res) => {
       });
     }
 
-    const otp = generateOtp();
+    /*
+    |--------------------------------------------------------------------------
+    | Send OTP Through Twilio
+    |--------------------------------------------------------------------------
+    */
 
-    user.otp = otp;
-    user.otpExpires = new Date(
-      Date.now() + 5 * 60 * 1000
-    );
+    const verification = await sendPhoneOtp(normalizedPhone);
 
-    await user.save();
+    if (verification.status !== "pending") {
+      return res.status(500).json({
+        success: false,
+        message: "Failed to send phone OTP.",
+      });
+    }
 
     return res.status(200).json({
       success: true,
-      message: "Phone login OTP generated successfully.",
-      data: {
-        userId: user._id,
-        otp, // Remove in production
-      },
+      message: "OTP sent successfully to your phone.",
     });
   } catch (error) {
-    console.error("Phone OTP error:", error);
+    console.error("❌ Phone OTP request error:", error);
 
     return res.status(500).json({
       success: false,
-      message: "Server error.",
+      message: "Failed to send phone OTP.",
     });
   }
 };
 
-
-
-
 export const verifyPhoneLoginOtp = async (req, res) => {
   try {
+    console.log("🔐 PHONE OTP VERIFY:", req.body);
+
     const { phone, otp } = req.body;
 
-    const user = await User.findOne({
-      phone,
-    }).select("+otp +otpExpires");
+    if (!phone || !otp) {
+      return res.status(400).json({
+        success: false,
+        message: "Phone and OTP are required.",
+      });
+    }
+
+    const normalizedPhone = normalizePhoneNumber(phone);
+
+    /*
+    |--------------------------------------------------------------------------
+    | Find User
+    |--------------------------------------------------------------------------
+    */
+
+    let user = await User.findOne({
+      phone: phone.toString().trim(),
+    });
+
+    if (!user) {
+      user = await User.findOne({
+        phone: normalizedPhone,
+      });
+    }
 
     if (!user) {
       return res.status(404).json({
@@ -299,49 +383,104 @@ export const verifyPhoneLoginOtp = async (req, res) => {
       });
     }
 
-    if (!user.otp || !user.otpExpires) {
-      return res.status(400).json({
+    /*
+    |--------------------------------------------------------------------------
+    | Check Phone Verification
+    |--------------------------------------------------------------------------
+    */
+
+    if (!user.isPhoneVerified) {
+      return res.status(403).json({
         success: false,
-        message: "No OTP found.",
+        message: "Please verify your phone first.",
       });
     }
 
-    if (new Date() > user.otpExpires) {
+    /*
+    |--------------------------------------------------------------------------
+    | Verify OTP Through Twilio
+    |--------------------------------------------------------------------------
+    */
+
+    const verification = await verifyPhoneOtpCode(normalizedPhone, otp);
+
+    console.log("🔐 TWILIO RESULT:", verification.status);
+
+    if (verification.status !== "approved") {
       return res.status(400).json({
         success: false,
-        message: "OTP expired.",
+        message: "Invalid or expired OTP.",
       });
     }
 
-    if (user.otp !== otp) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid OTP.",
-      });
-    }
+    /*
+    |--------------------------------------------------------------------------
+    | Generate JWT Tokens
+    |--------------------------------------------------------------------------
+    */
 
     const accessToken = generateAccessToken(user._id);
+
     const refreshToken = generateRefreshToken(user._id);
 
+    /*
+    |--------------------------------------------------------------------------
+    | Save Refresh Token
+    |--------------------------------------------------------------------------
+    */
+
     user.refreshToken = refreshToken;
-    user.otp = undefined;
-    user.otpExpires = undefined;
+
+    user.lastLoginAt = new Date();
 
     await user.save();
 
+    /*
+    |--------------------------------------------------------------------------
+    | Refresh Token Cookie
+    |--------------------------------------------------------------------------
+    */
+
+    res.cookie("refreshToken", refreshToken, {
+      httpOnly: true,
+
+      secure: process.env.NODE_ENV === "production",
+
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    /*
+    |--------------------------------------------------------------------------
+    | Response
+    |--------------------------------------------------------------------------
+    */
+
     return res.status(200).json({
       success: true,
-      message: "Phone OTP login successful.",
+
+      message: "Phone OTP login successful",
+
       data: {
-        userId: user._id,
-        name: user.name,
-        phone: user.phone,
+        user: {
+          userId: user._id,
+          name: user.name,
+          email: user.email,
+          phone: user.phone,
+
+          isEmailVerified: user.isEmailVerified,
+
+          isPhoneVerified: user.isPhoneVerified,
+        },
+
         accessToken,
+
         refreshToken,
       },
     });
   } catch (error) {
-    console.error("Phone OTP login error:", error);
+    console.error("❌ Phone OTP verification error:", error);
 
     return res.status(500).json({
       success: false,
@@ -349,7 +488,6 @@ export const verifyPhoneLoginOtp = async (req, res) => {
     });
   }
 };
-
 
 export const resendOtp = async (req, res) => {
   try {
@@ -379,9 +517,7 @@ export const resendOtp = async (req, res) => {
 
     const otp = generateOtp();
 
-    const otpExpires = new Date(
-      Date.now() + 5 * 60 * 1000
-    );
+    const otpExpires = new Date(Date.now() + 5 * 60 * 1000);
 
     user.otp = otp;
     user.otpExpires = otpExpires;
@@ -392,11 +528,10 @@ export const resendOtp = async (req, res) => {
       success: true,
       message: "OTP resent successfully",
       data: {
-        otp, 
+        otp,
         otpExpires,
       },
     });
-
   } catch (error) {
     console.error("Resend OTP error:", error);
 

@@ -11,6 +11,8 @@ import {
   generateRefreshToken,
 } from "../utils/generateToken.js";
 
+import { sendOtpEmail } from "../config/email.js";
+
 export const registerUser = async (req, res) => {
   try {
     const { name, email, phone, password } = req.body;
@@ -245,6 +247,7 @@ export const forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
 
+    // 1. Validate email
     if (!email) {
       return res.status(400).json({
         success: false,
@@ -252,8 +255,12 @@ export const forgotPassword = async (req, res) => {
       });
     }
 
+    // 2. Normalize email
+    const normalizedEmail = email.toLowerCase().trim();
+
+    // 3. Find user
     const user = await User.findOne({
-      email: email.toLowerCase().trim(),
+      email: normalizedEmail,
     });
 
     if (!user) {
@@ -263,54 +270,74 @@ export const forgotPassword = async (req, res) => {
       });
     }
 
+    // 4. Generate 6-digit OTP
     const otp = generateOtp();
 
+    // 5. OTP expiry - 5 minutes
     const otpExpires = new Date(Date.now() + 5 * 60 * 1000);
 
+    // 6. Save OTP in database
     user.otp = otp;
     user.otpExpires = otpExpires;
 
     await user.save();
 
+    // 7. Send OTP to user's email
+    await sendOtpEmail(normalizedEmail, otp);
+
+    // 8. Success response
+    // DO NOT return OTP in production
     return res.status(200).json({
       success: true,
       message: "Password reset OTP sent successfully",
-      data: {
-        otp, // Testing ke liye
-        otpExpires,
-      },
     });
   } catch (error) {
     console.error("Forgot password error:", error);
 
     return res.status(500).json({
       success: false,
-      message: "Server error",
+      message: "Failed to send password reset OTP",
     });
   }
 };
 
 export const resetPassword = async (req, res) => {
   try {
-    const { email, otp, newPassword } = req.body;
+    console.log(
+      "RESET PASSWORD BODY:",
+      req.body
+    );
+
+    const {
+      email,
+      otp,
+      newPassword,
+    } = req.body;
 
     if (!email || !otp || !newPassword) {
       return res.status(400).json({
         success: false,
-        message: "Email, OTP and new password are required",
+        message:
+          "Email, OTP and new password are required",
       });
     }
 
     if (newPassword.length < 6) {
       return res.status(400).json({
         success: false,
-        message: "Password must be at least 6 characters",
+        message:
+          "Password must be at least 6 characters",
       });
     }
 
+    const normalizedEmail =
+      email.toLowerCase().trim();
+
     const user = await User.findOne({
-      email: email.toLowerCase().trim(),
-    }).select("+otp +otpExpires");
+      email: normalizedEmail,
+    }).select(
+      "+otp +otpExpires"
+    );
 
     if (!user) {
       return res.status(404).json({
@@ -340,23 +367,32 @@ export const resetPassword = async (req, res) => {
       });
     }
 
-    const hashedPassword = await hashValue(newPassword);
+    // Hash new password
+    const hashedPassword =
+      await hashValue(newPassword);
 
     user.password = hashedPassword;
 
+    // Clear OTP
     user.otp = undefined;
     user.otpExpires = undefined;
 
+    // Invalidate refresh token
     user.refreshToken = undefined;
 
     await user.save();
 
     return res.status(200).json({
       success: true,
-      message: "Password reset successfully",
+      message:
+        "Password reset successfully",
     });
+
   } catch (error) {
-    console.error("Reset password error:", error);
+    console.error(
+      "Reset password error:",
+      error
+    );
 
     return res.status(500).json({
       success: false,

@@ -2,9 +2,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useNavigate } from "react-router-dom";
 
-import {
-  forgotPasswordSchema,
-} from "../../validation/authValidation";
+import { forgotPasswordSchema } from "../../validation/authValidation";
 
 import {
   useForgotPasswordMutation,
@@ -30,24 +28,26 @@ const ForgotPassword = () => {
 
   const onSubmit = async (data) => {
     try {
-      const response =
-        await forgotPassword(data).unwrap();
+      const email = data.email.toLowerCase().trim();
 
-      console.log(
-        "Forgot password response:",
-        response
-      );
+      const response = await forgotPassword({
+        email,
+      }).unwrap();
+
+      console.log("Forgot password response:", response);
 
       alert(
         response?.message ||
           "Password reset OTP sent to your email"
       );
 
+      // Email ko ResetPassword page par state ke through bhejo
       navigate("/reset-password", {
         state: {
-          email: data.email,
+          email,
         },
       });
+
     } catch (error) {
       console.error(
         "Forgot password error:",
@@ -63,7 +63,6 @@ const ForgotPassword = () => {
 
   return (
     <div className="min-h-screen bg-slate-100 flex items-center justify-center px-4 py-8">
-
       <div className="w-full max-w-md">
 
         <div className="bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden">
@@ -154,7 +153,6 @@ const ForgotPassword = () => {
         </div>
 
       </div>
-
     </div>
   );
 };

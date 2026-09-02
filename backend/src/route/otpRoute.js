@@ -6,23 +6,40 @@ import {
   verifyEmailLoginOtp,
   requestPhoneLoginOtp,
   verifyPhoneLoginOtp,
-  resendOtp
-
+  resendOtp,
 } from "../controller/otpController.js";
-
-
 
 const router = express.Router();
 
-
+// Registration OTP
 router.post("/verify-otp", verifyOtp);
 
-router.post("/login/email/request-otp", requestEmailLoginOtp);
-router.post("/login/email/verify-otp", verifyEmailLoginOtp);
+// Email OTP Login
+router.post(
+  "/login/email/request-otp",
+  requestEmailLoginOtp
+);
 
-router.post("/login/phone/request-otp", requestPhoneLoginOtp);
-router.post("/login/phone/verify-otp", verifyPhoneLoginOtp);
+router.post(
+  "/login/email/verify-otp",
+  verifyEmailLoginOtp
+);
 
-router.post("/resend-otp", resendOtp);
+// Phone OTP Login - Twilio
+router.post(
+  "/login/phone/request-otp",
+  requestPhoneLoginOtp
+);
+
+router.post(
+  "/login/phone/verify-otp",
+  verifyPhoneLoginOtp
+);
+
+// Resend OTP
+router.post(
+  "/resend-otp",
+  resendOtp
+);
 
 export default router;

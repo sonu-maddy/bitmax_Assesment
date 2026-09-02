@@ -1,6 +1,9 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useLocation, useNavigate } from "react-router-dom";
+import {
+  useLocation,
+  useNavigate,
+} from "react-router-dom";
 import { z } from "zod";
 
 import {
@@ -43,6 +46,7 @@ const ResetPassword = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // ForgotPassword se email receive hoga
   const email = location.state?.email;
 
   const [
@@ -66,15 +70,42 @@ const ResetPassword = () => {
 
   const onSubmit = async (data) => {
     try {
-      const response =
-        await resetPassword({
-          email,
-          otp: data.otp,
-          password: data.password,
-        }).unwrap();
+      // Email missing
+      if (!email) {
+        alert(
+          "Email not found. Please request OTP again."
+        );
+
+        navigate("/forgot-password");
+        return;
+      }
+
+      // Password match
+      if (
+        data.password !==
+        data.confirmPassword
+      ) {
+        alert("Passwords do not match");
+        return;
+      }
+
+      // Backend ke expected format mein payload
+      const payload = {
+        email: email.toLowerCase().trim(),
+        otp: data.otp.trim(),
+        newPassword: data.password,
+      };
 
       console.log(
-        "Password reset:",
+        "RESET PASSWORD PAYLOAD:",
+        payload
+      );
+
+      const response =
+        await resetPassword(payload).unwrap();
+
+      console.log(
+        "Reset password response:",
         response
       );
 
@@ -91,9 +122,14 @@ const ResetPassword = () => {
         error
       );
 
+      console.error(
+        "Backend response:",
+        error?.data
+      );
+
       alert(
         error?.data?.message ||
-          "Invalid or expired OTP"
+          "Unable to reset password"
       );
     }
   };
@@ -125,8 +161,6 @@ const ResetPassword = () => {
             </p>
 
           </div>
-
-          {/* Form */}
 
           <form
             onSubmit={handleSubmit(onSubmit)}
@@ -241,8 +275,6 @@ const ResetPassword = () => {
             </button>
 
           </form>
-
-          {/* Back */}
 
           <div className="border-t border-slate-200 px-6 py-4 text-center">
 
