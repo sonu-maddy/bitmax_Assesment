@@ -13,103 +13,82 @@ import {
 
 import { sendOtpEmail } from "../config/email.js";
 
+
+
 export const registerUser = async (req, res) => {
   try {
+    console.log("REGISTER DATA:", req.body);
+
     const { name, email, phone, password } = req.body;
 
-    if (!name || !password) {
+    // Validation
+    if (!name || !email || !phone || !password) {
       return res.status(400).json({
         success: false,
-        message: "Name and password are required.",
+        message: "All fields are required",
       });
     }
 
-    if (!email && !phone) {
-      return res.status(400).json({
-        success: false,
-        message: "Either email or phone is required.",
-      });
-    }
+    const normalizedEmail = email.toLowerCase().trim();
 
-    if (email) {
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(email)) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid email address.",
-        });
-      }
-    }
-
-    if (phone) {
-      const phoneRegex = /^\+?[0-9]{10,15}$/;
-      if (!phoneRegex.test(phone)) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid phone number.",
-        });
-      }
-    }
-
-    if (password.length < 6) {
-      return res.status(400).json({
-        success: false,
-        message: "Password must be at least 6 characters long.",
-      });
-    }
-
+    // Check existing user
     const existingUser = await User.findOne({
-      $or: [
-        email ? { email: email.toLowerCase() } : null,
-        phone ? { phone } : null,
-      ].filter(Boolean),
+      $or: [{ email: normalizedEmail }, { phone }],
     });
 
     if (existingUser) {
       return res.status(409).json({
         success: false,
-        message: "User with this email or phone already exists.",
+        message: "Email or phone number already registered",
       });
     }
 
-    const hashedPassword = await hashValue(password);
+    // Generate OTP
     const otp = generateOtp();
 
     const otpExpires = new Date(Date.now() + 5 * 60 * 1000);
 
-    const newUser = new User({
+    // Hash password
+    const hashedPassword = await hashValue(password);
+
+    // Create user
+    const user = await User.create({
       name,
-      email: email ? email.toLowerCase() : undefined,
+      email: normalizedEmail,
       phone,
       password: hashedPassword,
+
+      isEmailVerified: false,
+      isPhoneVerified: false,
+
       otp,
       otpExpires,
     });
 
-    await newUser.save();
+    // IMPORTANT: Send OTP email
+    await sendOtpEmail(normalizedEmail, otp);
+
+    console.log("📧 Registration OTP sent to:", normalizedEmail);
 
     return res.status(201).json({
       success: true,
       message: "User registered successfully. OTP sent for verification.",
       data: {
-        userId: newUser._id,
-        name: newUser.name,
-        email: newUser.email,
-        phone: newUser.phone,
-        otp,
-        otpExpires: newUser.otpExpires,
+        userId: user._id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
       },
     });
   } catch (error) {
-    console.error("Register error:", error);
+    console.error("❌ Registration error:", error);
+
     return res.status(500).json({
       success: false,
-      message: "Server error during registration.",
-      error: error.message,
+      message: "Registration failed",
     });
   }
 };
-
 export const loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -303,41 +282,29 @@ export const forgotPassword = async (req, res) => {
 
 export const resetPassword = async (req, res) => {
   try {
-    console.log(
-      "RESET PASSWORD BODY:",
-      req.body
-    );
+    console.log("RESET PASSWORD BODY:", req.body);
 
-    const {
-      email,
-      otp,
-      newPassword,
-    } = req.body;
+    const { email, otp, newPassword } = req.body;
 
     if (!email || !otp || !newPassword) {
       return res.status(400).json({
         success: false,
-        message:
-          "Email, OTP and new password are required",
+        message: "Email, OTP and new password are required",
       });
     }
 
     if (newPassword.length < 6) {
       return res.status(400).json({
         success: false,
-        message:
-          "Password must be at least 6 characters",
+        message: "Password must be at least 6 characters",
       });
     }
 
-    const normalizedEmail =
-      email.toLowerCase().trim();
+    const normalizedEmail = email.toLowerCase().trim();
 
     const user = await User.findOne({
       email: normalizedEmail,
-    }).select(
-      "+otp +otpExpires"
-    );
+    }).select("+otp +otpExpires");
 
     if (!user) {
       return res.status(404).json({
@@ -368,8 +335,7 @@ export const resetPassword = async (req, res) => {
     }
 
     // Hash new password
-    const hashedPassword =
-      await hashValue(newPassword);
+    const hashedPassword = await hashValue(newPassword);
 
     user.password = hashedPassword;
 
@@ -384,15 +350,10 @@ export const resetPassword = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message:
-        "Password reset successfully",
+      message: "Password reset successfully",
     });
-
   } catch (error) {
-    console.error(
-      "Reset password error:",
-      error
-    );
+    console.error("Reset password error:", error);
 
     return res.status(500).json({
       success: false,
