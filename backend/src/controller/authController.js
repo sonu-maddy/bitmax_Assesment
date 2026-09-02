@@ -11,8 +11,6 @@ import {
   generateRefreshToken,
 } from "../utils/generateToken.js";
 
-
-
 export const registerUser = async (req, res) => {
   try {
     const { name, email, phone, password } = req.body;
@@ -110,7 +108,6 @@ export const registerUser = async (req, res) => {
   }
 };
 
-
 export const loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -140,10 +137,7 @@ export const loginUser = async (req, res) => {
       });
     }
 
-    const isPasswordValid = await compareValue(
-      password,
-      user.password
-    );
+    const isPasswordValid = await compareValue(password, user.password);
 
     if (!isPasswordValid) {
       return res.status(401).json({
@@ -180,12 +174,9 @@ export const loginUser = async (req, res) => {
   }
 };
 
-
 export const refreshToken = async (req, res) => {
   try {
-    const { refreshToken } = req.body;
-
-    console.log("1. Token received:", refreshToken);
+    const refreshToken = req.cookies.refreshToken;
 
     if (!refreshToken) {
       return res.status(401).json({
@@ -194,17 +185,9 @@ export const refreshToken = async (req, res) => {
       });
     }
 
-    const decoded = jwt.verify(
-      refreshToken,
-      process.env.JWT_REFRESH_SECRET
-    );
+    const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
 
-    console.log("2. Token decoded:", decoded);
-
-    const user = await User.findById(decoded.userId)
-      .select("+refreshToken");
-
-    console.log("3. DB token:", user?.refreshToken);
+    const user = await User.findById(decoded.userId).select("+refreshToken");
 
     if (!user) {
       return res.status(404).json({
@@ -216,7 +199,7 @@ export const refreshToken = async (req, res) => {
     if (user.refreshToken !== refreshToken) {
       return res.status(401).json({
         success: false,
-        message: "Refresh token does not match",
+        message: "Invalid refresh token",
       });
     }
 
@@ -228,25 +211,35 @@ export const refreshToken = async (req, res) => {
 
     await user.save();
 
+    res.cookie("refreshToken", newRefreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
     return res.status(200).json({
       success: true,
       message: "Token refreshed successfully",
       data: {
         accessToken: newAccessToken,
-        refreshToken: newRefreshToken,
+        user: {
+          userId: user._id,
+          name: user.name,
+          email: user.email,
+          phone: user.phone,
+        },
       },
     });
-
   } catch (error) {
-    console.error("ACTUAL ERROR:", error.name, error.message);
+    console.error("Refresh token error:", error);
 
     return res.status(401).json({
       success: false,
-      message: error.message,
+      message: "Invalid or expired refresh token",
     });
   }
 };
-
 
 export const forgotPassword = async (req, res) => {
   try {
@@ -272,9 +265,7 @@ export const forgotPassword = async (req, res) => {
 
     const otp = generateOtp();
 
-    const otpExpires = new Date(
-      Date.now() + 5 * 60 * 1000
-    );
+    const otpExpires = new Date(Date.now() + 5 * 60 * 1000);
 
     user.otp = otp;
     user.otpExpires = otpExpires;
@@ -289,7 +280,6 @@ export const forgotPassword = async (req, res) => {
         otpExpires,
       },
     });
-
   } catch (error) {
     console.error("Forgot password error:", error);
 
@@ -300,14 +290,9 @@ export const forgotPassword = async (req, res) => {
   }
 };
 
-
 export const resetPassword = async (req, res) => {
   try {
-    const {
-      email,
-      otp,
-      newPassword,
-    } = req.body;
+    const { email, otp, newPassword } = req.body;
 
     if (!email || !otp || !newPassword) {
       return res.status(400).json({
@@ -355,14 +340,10 @@ export const resetPassword = async (req, res) => {
       });
     }
 
-    
-    const hashedPassword = await hashValue(
-      newPassword
-    );
+    const hashedPassword = await hashValue(newPassword);
 
     user.password = hashedPassword;
 
-    
     user.otp = undefined;
     user.otpExpires = undefined;
 
@@ -374,7 +355,6 @@ export const resetPassword = async (req, res) => {
       success: true,
       message: "Password reset successfully",
     });
-
   } catch (error) {
     console.error("Reset password error:", error);
 
