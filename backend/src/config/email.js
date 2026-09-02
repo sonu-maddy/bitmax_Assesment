@@ -1,175 +1,127 @@
-import nodemailer from "nodemailer";
+import { Resend } from "resend";
 
-
-const getEmailTransporter = () => {
-
-  const emailUser =
-    process.env.EMAIL_USER;
-
-  const emailPassword =
-    process.env.EMAIL_PASSWORD?.trim();
-
-
-  console.log(
-    "========== EMAIL ENV CHECK =========="
-  );
-
-  console.log(
-    "EMAIL_USER:",
-    emailUser
-      ? "LOADED"
-      : "MISSING"
-  );
-
-  console.log(
-    "EMAIL_PASSWORD:",
-    emailPassword
-      ? "LOADED"
-      : "MISSING"
-  );
-
-  console.log(
-    "====================================="
-  );
-
-
-  if (!emailUser) {
-    throw new Error(
-      "EMAIL_USER is missing"
-    );
-  }
-
-  if (!emailPassword) {
-    throw new Error(
-      "EMAIL_PASSWORD is missing"
-    );
-  }
-
-
-  return nodemailer.createTransport({
-
-    host: "smtp.gmail.com",
-
-    port: 465,
-
-    secure: true,
-
-    auth: {
-      user: emailUser,
-      pass: emailPassword,
-    },
-
-  });
-};
+const resend = new Resend(
+    process.env.RESEND_API_KEY
+);
 
 
 export const sendOtpEmail = async (
-  email,
-  otp
+    email,
+    otp
 ) => {
 
-  try {
+    try {
 
-    const emailUser =
-      process.env.EMAIL_USER;
-
-
-    const transporter =
-      getEmailTransporter();
-
-
-    console.log(
-      "📧 Sending OTP to:",
-      email
-    );
+        if (!process.env.RESEND_API_KEY) {
+            throw new Error(
+                "RESEND_API_KEY is missing"
+            );
+        }
 
 
-    await transporter.verify();
+        const fromEmail =
+            process.env.EMAIL_FROM ||
+            "onboarding@resend.dev";
 
 
-    console.log(
-      "✅ SMTP connection successful"
-    );
+        console.log(
+            "📧 Sending OTP to:",
+            email
+        );
 
 
-    const info =
-      await transporter.sendMail({
+        const { data, error } =
+            await resend.emails.send({
 
-        from:
-          `"Bitmax Authentication" <${emailUser}>`,
+                from:
+                    `Bitmax Authentication <${fromEmail}>`,
 
-        to: email,
+                to: [email],
 
-        subject:
-          "Your Bitmax Verification OTP",
+                subject:
+                    "Your Bitmax Verification OTP",
 
-        html: `
-          <div style="
-            font-family: Arial, sans-serif;
-            max-width: 600px;
-            margin: auto;
-            padding: 30px;
-            border: 1px solid #ddd;
-            border-radius: 10px;
-          ">
+                html: `
+                    <div style="
+                        font-family: Arial, sans-serif;
+                        max-width: 600px;
+                        margin: auto;
+                        padding: 30px;
+                        border: 1px solid #ddd;
+                        border-radius: 10px;
+                    ">
 
-            <h2>
-              Bitmax Authentication
-            </h2>
+                        <h2>
+                            Bitmax Authentication
+                        </h2>
 
-            <p>
-              Your OTP for login is:
-            </p>
+                        <p>
+                            Your OTP for login is:
+                        </p>
 
-            <div style="
-              font-size: 32px;
-              font-weight: bold;
-              letter-spacing: 8px;
-              margin: 25px 0;
-            ">
-              ${otp}
-            </div>
+                        <div style="
+                            font-size: 32px;
+                            font-weight: bold;
+                            letter-spacing: 8px;
+                            margin: 25px 0;
+                        ">
+                            ${otp}
+                        </div>
 
-            <p>
-              This OTP is valid for
-              <strong>5 minutes</strong>.
-            </p>
+                        <p>
+                            This OTP is valid for
+                            <strong>5 minutes</strong>.
+                        </p>
 
-            <p>
-              If you did not request this OTP,
-              please ignore this email.
-            </p>
+                        <p>
+                            If you did not request this OTP,
+                            please ignore this email.
+                        </p>
 
-          </div>
-        `,
-      });
+                        <hr />
+
+                        <p style="
+                            font-size: 12px;
+                            color: #777;
+                        ">
+                            This is an automated email from
+                            Bitmax Authentication.
+                        </p>
+
+                    </div>
+                `,
+            });
 
 
-    console.log(
-      "✅ Email sent:",
-      info.messageId
-    );
+        if (error) {
+
+            console.error(
+                "❌ Resend API Error:",
+                error
+            );
+
+            throw new Error(
+                error.message ||
+                "Failed to send email"
+            );
+        }
 
 
-    return info;
+        console.log(
+            "✅ OTP email sent successfully:",
+            data?.id
+        );
 
-  } catch (error) {
 
-    console.error(
-      "❌ SMTP ERROR MESSAGE:",
-      error.message
-    );
+        return data;
 
-    console.error(
-      "❌ SMTP ERROR CODE:",
-      error.code
-    );
+    } catch (error) {
 
-    console.error(
-      "❌ SMTP RESPONSE:",
-      error.response
-    );
+        console.error(
+            "❌ Email sending error:",
+            error
+        );
 
-    throw error;
-  }
+        throw error;
+    }
 };
