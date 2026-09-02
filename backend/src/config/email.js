@@ -1,62 +1,175 @@
 import nodemailer from "nodemailer";
 
-export const sendOtpEmail = async (email, otp) => {
-    try {
-        const emailUser = process.env.EMAIL_USER;
-        const emailPassword = process.env.EMAIL_PASSWORD?.trim();
 
-        console.log("Mailer Email:", emailUser);
-        console.log("Mailer Password Loaded:", !!emailPassword);
+const getEmailTransporter = () => {
 
-        if (!emailUser || !emailPassword) {
-            throw new Error(
-                "EMAIL_USER or EMAIL_PASSWORD is missing in .env"
-            );
-        }
+  const emailUser =
+    process.env.EMAIL_USER;
 
-        const transporter = nodemailer.createTransport({
-            host: "smtp.gmail.com",
-            port: 465,
-            secure: true,
-            auth: {
-                user: emailUser,
-                pass: emailPassword,
-            },
-        });
+  const emailPassword =
+    process.env.EMAIL_PASSWORD?.trim();
 
-        await transporter.verify();
 
-        console.log("✅ SMTP connection successful");
+  console.log(
+    "========== EMAIL ENV CHECK =========="
+  );
 
-        const info = await transporter.sendMail({
-            from: `"Bitmax Authentication" <${emailUser}>`,
-            to: email,
-            subject: "Your Bitmax OTP",
+  console.log(
+    "EMAIL_USER:",
+    emailUser
+      ? "LOADED"
+      : "MISSING"
+  );
 
-            html: `
-                <div style="font-family: Arial, sans-serif;">
-                    <h2>Bitmax Authentication</h2>
+  console.log(
+    "EMAIL_PASSWORD:",
+    emailPassword
+      ? "LOADED"
+      : "MISSING"
+  );
 
-                    <p>Your OTP is:</p>
+  console.log(
+    "====================================="
+  );
 
-                    <h1>${otp}</h1>
 
-                    <p>This OTP is valid for 5 minutes.</p>
+  if (!emailUser) {
+    throw new Error(
+      "EMAIL_USER is missing"
+    );
+  }
 
-                    <p>
-                        If you did not request this OTP,
-                        please ignore this email.
-                    </p>
-                </div>
-            `,
-        });
+  if (!emailPassword) {
+    throw new Error(
+      "EMAIL_PASSWORD is missing"
+    );
+  }
 
-        console.log("✅ OTP email sent:", info.messageId);
 
-        return info;
+  return nodemailer.createTransport({
 
-    } catch (error) {
-        console.error("❌ Email sending error:", error);
-        throw error;
-    }
+    host: "smtp.gmail.com",
+
+    port: 465,
+
+    secure: true,
+
+    auth: {
+      user: emailUser,
+      pass: emailPassword,
+    },
+
+  });
+};
+
+
+export const sendOtpEmail = async (
+  email,
+  otp
+) => {
+
+  try {
+
+    const emailUser =
+      process.env.EMAIL_USER;
+
+
+    const transporter =
+      getEmailTransporter();
+
+
+    console.log(
+      "📧 Sending OTP to:",
+      email
+    );
+
+
+    await transporter.verify();
+
+
+    console.log(
+      "✅ SMTP connection successful"
+    );
+
+
+    const info =
+      await transporter.sendMail({
+
+        from:
+          `"Bitmax Authentication" <${emailUser}>`,
+
+        to: email,
+
+        subject:
+          "Your Bitmax Verification OTP",
+
+        html: `
+          <div style="
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: auto;
+            padding: 30px;
+            border: 1px solid #ddd;
+            border-radius: 10px;
+          ">
+
+            <h2>
+              Bitmax Authentication
+            </h2>
+
+            <p>
+              Your OTP for login is:
+            </p>
+
+            <div style="
+              font-size: 32px;
+              font-weight: bold;
+              letter-spacing: 8px;
+              margin: 25px 0;
+            ">
+              ${otp}
+            </div>
+
+            <p>
+              This OTP is valid for
+              <strong>5 minutes</strong>.
+            </p>
+
+            <p>
+              If you did not request this OTP,
+              please ignore this email.
+            </p>
+
+          </div>
+        `,
+      });
+
+
+    console.log(
+      "✅ Email sent:",
+      info.messageId
+    );
+
+
+    return info;
+
+  } catch (error) {
+
+    console.error(
+      "❌ SMTP ERROR MESSAGE:",
+      error.message
+    );
+
+    console.error(
+      "❌ SMTP ERROR CODE:",
+      error.code
+    );
+
+    console.error(
+      "❌ SMTP RESPONSE:",
+      error.response
+    );
+
+    throw error;
+  }
 };

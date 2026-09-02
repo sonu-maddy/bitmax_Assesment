@@ -3,6 +3,7 @@ import { z } from "zod";
 // ===============================
 // REGISTER
 // ===============================
+
 export const registerSchema = z
   .object({
     name: z
@@ -13,12 +14,16 @@ export const registerSchema = z
     email: z
       .string()
       .trim()
+      .toLowerCase()
       .email("Please enter a valid email"),
 
     phone: z
       .string()
       .trim()
-      .regex(/^\+?[0-9]{10,15}$/, "Invalid phone number"),
+      .regex(
+        /^\+?[0-9]{10,15}$/,
+        "Invalid phone number"
+      ),
 
     password: z
       .string()
@@ -29,7 +34,8 @@ export const registerSchema = z
       .min(6, "Please confirm your password"),
   })
   .refine(
-    (data) => data.password === data.confirmPassword,
+    (data) =>
+      data.password === data.confirmPassword,
     {
       message: "Passwords do not match",
       path: ["confirmPassword"],
@@ -39,10 +45,12 @@ export const registerSchema = z
 // ===============================
 // LOGIN
 // ===============================
+
 export const loginSchema = z.object({
   email: z
     .string()
     .trim()
+    .toLowerCase()
     .email("Please enter a valid email"),
 
   password: z
@@ -53,26 +61,33 @@ export const loginSchema = z.object({
 // ===============================
 // FORGOT PASSWORD
 // ===============================
+
 export const forgotPasswordSchema = z.object({
   email: z
     .string()
     .trim()
+    .toLowerCase()
     .email("Please enter a valid email"),
 });
 
 // ===============================
 // RESET PASSWORD
 // ===============================
+
 export const resetPasswordSchema = z
   .object({
     email: z
       .string()
       .trim()
+      .toLowerCase()
       .email("Please enter a valid email"),
 
     otp: z
       .string()
-      .regex(/^\d{6}$/, "OTP must be exactly 6 digits"),
+      .regex(
+        /^\d{6}$/,
+        "OTP must be exactly 6 digits"
+      ),
 
     password: z
       .string()
@@ -83,7 +98,8 @@ export const resetPasswordSchema = z
       .min(6, "Please confirm your password"),
   })
   .refine(
-    (data) => data.password === data.confirmPassword,
+    (data) =>
+      data.password === data.confirmPassword,
     {
       message: "Passwords do not match",
       path: ["confirmPassword"],
@@ -93,8 +109,12 @@ export const resetPasswordSchema = z
 // ===============================
 // OTP
 // ===============================
+
 export const otpSchema = z.object({
   otp: z
     .string()
-    .regex(/^\d{6}$/, "OTP must be exactly 6 digits"),
+    .regex(
+      /^\d{6}$/,
+      "OTP must be exactly 6 digits"
+    ),
 });

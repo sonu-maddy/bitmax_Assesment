@@ -729,11 +729,10 @@ const Login = () => {
                                 onClick={() =>
                                     changeMethod("password")
                                 }
-                                className={`py-2 text-xs sm:text-sm rounded-md font-medium ${
-                                    method === "password"
+                                className={`py-2 text-xs sm:text-sm rounded-md font-medium ${method === "password"
                                         ? "bg-white shadow text-blue-600"
                                         : "text-slate-500"
-                                }`}
+                                    }`}
                             >
                                 Password
                             </button>
@@ -745,11 +744,10 @@ const Login = () => {
                                 onClick={() =>
                                     changeMethod("email")
                                 }
-                                className={`py-2 text-xs sm:text-sm rounded-md font-medium ${
-                                    method === "email"
+                                className={`py-2 text-xs sm:text-sm rounded-md font-medium ${method === "email"
                                         ? "bg-white shadow text-blue-600"
                                         : "text-slate-500"
-                                }`}
+                                    }`}
                             >
                                 Email OTP
                             </button>
@@ -761,11 +759,10 @@ const Login = () => {
                                 onClick={() =>
                                     changeMethod("phone")
                                 }
-                                className={`py-2 text-xs sm:text-sm rounded-md font-medium ${
-                                    method === "phone"
+                                className={`py-2 text-xs sm:text-sm rounded-md font-medium ${method === "phone"
                                         ? "bg-white shadow text-blue-600"
                                         : "text-slate-500"
-                                }`}
+                                    }`}
                             >
                                 Phone OTP
                             </button>
@@ -983,11 +980,11 @@ const Login = () => {
                                 className="w-full py-2.5 bg-blue-600 text-white rounded-lg font-semibold text-sm hover:bg-blue-700 disabled:opacity-60"
                             >
                                 {emailOtpLoading ||
-                                verifyEmailLoading
+                                    verifyEmailLoading
                                     ? "Please wait..."
                                     : emailOtpSent
-                                    ? "Verify OTP"
-                                    : "Send OTP"}
+                                        ? "Verify OTP"
+                                        : "Send OTP"}
                             </button>
 
                             {/* Change Email */}
@@ -1109,11 +1106,11 @@ const Login = () => {
                                 className="w-full py-2.5 bg-blue-600 text-white rounded-lg font-semibold text-sm hover:bg-blue-700 disabled:opacity-60"
                             >
                                 {phoneOtpLoading ||
-                                verifyPhoneLoading
+                                    verifyPhoneLoading
                                     ? "Please wait..."
                                     : phoneOtpSent
-                                    ? "Verify OTP"
-                                    : "Send OTP"}
+                                        ? "Verify OTP"
+                                        : "Send OTP"}
                             </button>
 
                             {/* Change Phone */}

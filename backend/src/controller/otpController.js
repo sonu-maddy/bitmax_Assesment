@@ -107,6 +107,8 @@ export const verifyOtp = async (req, res) => {
 
 export const requestEmailLoginOtp = async (req, res) => {
   try {
+    console.log("📧 EMAIL OTP REQUEST:", req.body);
+
     const { email } = req.body;
 
     if (!email) {
@@ -117,6 +119,8 @@ export const requestEmailLoginOtp = async (req, res) => {
     }
 
     const normalizedEmail = email.toLowerCase().trim();
+
+    console.log("📧 Normalized email:", normalizedEmail);
 
     const user = await User.findOne({
       email: normalizedEmail,
@@ -129,6 +133,9 @@ export const requestEmailLoginOtp = async (req, res) => {
       });
     }
 
+    console.log("👤 User found:", user.email);
+    console.log("📧 Email verified:", user.isEmailVerified);
+
     if (!user.isEmailVerified) {
       return res.status(403).json({
         success: false,
@@ -138,24 +145,41 @@ export const requestEmailLoginOtp = async (req, res) => {
 
     const otp = generateOtp();
 
+    const otpExpires = new Date(Date.now() + 5 * 60 * 1000);
+
     user.otp = otp;
-    user.otpExpires = new Date(Date.now() + 5 * 60 * 1000);
+    user.otpExpires = otpExpires;
 
     await user.save();
 
-    // Send OTP to email
+    console.log("🔐 OTP generated");
+    console.log("⏰ OTP expires:", otpExpires);
+
+    // Send OTP email
+    console.log("📤 Sending OTP email...");
+
     await sendOtpEmail(normalizedEmail, otp);
+
+    console.log("✅ EMAIL OTP SENT SUCCESSFULLY");
 
     return res.status(200).json({
       success: true,
       message: "OTP sent to your email",
     });
   } catch (error) {
-    console.error("Email OTP error:", error);
+    console.error("❌ EMAIL OTP ERROR MESSAGE:", error.message);
+
+    console.error("❌ EMAIL OTP ERROR CODE:", error.code);
+
+    console.error("❌ EMAIL OTP ERROR RESPONSE:", error.response);
+
+    console.error("❌ FULL ERROR:", error);
 
     return res.status(500).json({
       success: false,
-      message: "Failed to send OTP",
+
+      // Temporary: actual error frontend me dikhega
+      message: error.message || "Failed to send OTP",
     });
   }
 };
